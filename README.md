@@ -31,7 +31,7 @@ all is well received.
 ### Starting the server
 As said, Slackers uses the excellent FastAPI to serve it's endpoints. Since you're here, 
 I'm assuming you know what FastAPI is, but if you don't, you can learn all about 
-how that works with [this tutorial](https://fastapi.tiangolo.com/tutorial/intro/). 
+how that works with [this tutorial](https://fastapi.tiangolo.com/tutorial/). 
 
 Slackers offers you a router which you can include in your own FastAPI.
 ```python
@@ -100,6 +100,70 @@ def handle_action_by_id(payload):
 def handle_action_by_callback_id(payload):
     log.info(f"Action started.")
     log.debug(payload)
+```
+
+#### Interactive messages
+Interactive message actions do not have an `action_id`. They do have a `name` and a `type`. 
+To act upon interactive messages, you can listen for the action type, `interactive_message`
+as wel as the combination of the `interactive_message` and `name`, `type` or both.
+```python
+import logging
+from slackers.hooks import actions
+
+log = logging.getLogger(__name__)
+
+# Listening for the action type.
+@actions.on("interactive_message")
+def handle_action(payload):
+    log.info("Action started.")
+    log.debug(payload)
+
+# Listen for an action by it's name
+@actions.on("interactive_message:action_name")
+def handle_action_by_id(payload):
+    log.info("Action started.")
+    log.debug(payload)
+
+# Listen for an action by it's type
+@actions.on("interactive_message:action_type")
+def handle_action_by_callback_id(payload):
+    log.info(f"Action started.")
+    log.debug(payload)
+
+# Listen for an action by it's name and type
+@actions.on("interactive_message:action_name:action_type")
+def handle_action_by_callback_id(payload):
+    log.info(f"Action started.")
+    log.debug(payload)
+```
+
+#### Custom responses
+Slackers tries to be fast to respond to Slack. The events you are listening for with the
+likes of `@actions.on(...)` are scheduled as an async task in a fire and forget fashion.
+After scheduling these events, Slackers will by default return an empty 200 response which
+might happen before the events are handled.
+
+In some cases you might want to act on the payload and return a custom response to Slack.
+For this, you can use the slackers `responder` decorator to define your custom handler
+function. This function is then used as a callback instead of returning the default response.
+You must ensure your custom handler returns a `starlette.responses.Response` or one of it's 
+subclasses. You must furthermore ensure that there is only one responder responding to your
+Slack request.
+
+Please note that the events are also emitted, so you could have both `@actions.on("block_action:xyz")`
+and `@responder("block_action:xyz")`. Just keep in mind that the event emissions are async and are
+not awaited. In other words, Slackers doesn't ensure that the response (whether your custom response
+or the default) is returned before or after the events are emitted.
+
+```python
+from starlette.responses import JSONResponse
+from slackers.hooks import responder
+
+@responder("block_actions:your_callback_id")
+def custom_handler(payload):
+    # handle your payload
+    ...
+    return JSONResponse(content={"custom": "Custom Response"})
 ```
 
 ### Slash commands
